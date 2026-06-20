@@ -1,0 +1,118 @@
+services:
+  ldap:
+    image: osixia/openldap:1.5.0
+    container_name: ldap
+    hostname: ldap
+    environment:
+      LDAP_ORGANISATION: ${LDAP_ORGANISATION}
+      LDAP_DOMAIN: ${LDAP_DOMAIN}
+      LDAP_ADMIN_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+    ports:
+      - "389:389"
+    volumes:
+      - ldap-database:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "ldapsearch -x -H ldap://localhost -D cn=admin,dc=demo,dc=local -w ${LDAP_ADMIN_PASSWORD} -b dc=demo,dc=local >/dev/null 2>&1"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16
+    container_name: guac-postgres
+    hostname: postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guacd:
+    image: guacamole/guacd
+    container_name: guacd
+    hostname: guacd
+    restart: unless-stopped
+
+  guacamole:
+    image: guacamole/guacamole
+    container_name: guacamole
+    hostname: guacamole
+    depends_on:
+      - postgres
+      - guacd
+      - ldap
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRESQL_HOSTNAME: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      LDAP_HOSTNAME: ldap
+      LDAP_PORT: 389
+      LDAP_SEARCH_BIND_DN: cn=admin,dc=demo,dc=local
+      LDAP_SEARCH_BIND_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+      LDAP_USER_BASE_DN: ou=People,dc=demo,dc=local
+      LDAP_USERNAME_ATTRIBUTE: uid
+      LDAP_GROUP_BASE_DN: ou=Groups,dc=demo,dc=local
+      LDAP_GROUP_NAME_ATTRIBUTE: cn
+      LDAP_MEMBER_ATTRIBUTE: member
+      LDAP_MEMBER_ATTRIBUTE_TYPE: dn
+      EXTENSION_PRIORITY: "*, -ban"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/guacamole/ || exit 1"
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  ssh1:
+    build: ./ssh-server
+    container_name: ssh1
+    hostname: ssh1
+    environment:
+      SSH_NPA_USER: ${SSH_NPA_USER}
+      SSH_NPA_PASSWORD: ${SSH_NPA_PASSWORD}
+    restart: unless-stopped
+
+  ssh2:
+    build: ./ssh-server
+    container_name: ssh2
+    hostname: ssh2
+    environment:
+      SSH_NPA_USER: ${SSH_NPA_USER}
+      SSH_NPA_PASSWORD: ${SSH_NPA_PASSWORD}
+    restart: unless-stopped
+
+  desktop:
+    build: ./rdp-desktop
+    container_name: desktop
+    hostname: desktop
+    environment:
+      RDP_NPA_USER: ${RDP_NPA_USER}
+      RDP_NPA_PASSWORD: ${RDP_NPA_PASSWORD}
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  ldap-database:
+  ldap-config:

@@ -1,0 +1,31 @@
+dn: ou=People,dc=demo,dc=local
+objectClass: organizationalUnit
+ou: People
+
+dn: ou=Groups,dc=demo,dc=local
+objectClass: organizationalUnit
+ou: Groups
+
+dn: uid=alice,ou=People,dc=demo,dc=local
+objectClass: inetOrgPerson
+cn: Alice
+sn: Alice
+uid: alice
+userPassword: alice123
+
+dn: uid=bob,ou=People,dc=demo,dc=local
+objectClass: inetOrgPerson
+cn: Bob
+sn: Bob
+uid: bob
+userPassword: bob123
+
+dn: cn=Desktop Users,ou=Groups,dc=demo,dc=local
+objectClass: groupOfNames
+cn: Desktop Users
+member: uid=alice,ou=People,dc=demo,dc=local
+
+dn: cn=SSH Users,ou=Groups,dc=demo,dc=local
+objectClass: groupOfNames
+cn: SSH Users
+member: uid=bob,ou=People,dc=demo,dc=local
