@@ -122,6 +122,10 @@ Open:
 
 ```text
 http://localhost:8080/guacamole
+
+http://127.0.0.1:8080/guacamole/#/
+
+If localhost does not load, use 127.0.0.1.
 ```
 
 Login using LDAP credentials.
