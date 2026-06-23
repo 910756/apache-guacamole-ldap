@@ -7,6 +7,7 @@ services:
       LDAP_ORGANISATION: ${LDAP_ORGANISATION}
       LDAP_DOMAIN: ${LDAP_DOMAIN}
       LDAP_ADMIN_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+      LDAP_TLS: "false"
     ports:
       - "389:389"
     volumes:
@@ -14,14 +15,27 @@ services:
       - ldap-config:/etc/ldap/slapd.d
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "ldapsearch -x -H ldap://localhost -D cn=admin,dc=demo,dc=local -w ${LDAP_ADMIN_PASSWORD} -b dc=demo,dc=local >/dev/null 2>&1"
-        ]
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost -D cn=admin,dc=demo,dc=local -w ${LDAP_ADMIN_PASSWORD} -b dc=demo,dc=local >/dev/null 2>&1"]
       interval: 15s
       timeout: 5s
       retries: 5
+
+  ldap-init:
+    image: osixia/openldap:1.5.0
+    container_name: ldap-init
+    depends_on:
+      ldap:
+        condition: service_healthy
+    environment:
+      LDAP_ADMIN_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+    volumes:
+      - ./ldap/ldap-setup.ldif:/tmp/ldap-setup.ldif:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - sleep 10 && ldapadd -v -x -H ldap://ldap:389 -D "cn=admin,dc=demo,dc=local" -w "$$LDAP_ADMIN_PASSWORD" -f /tmp/ldap-setup.ldif
+    restart: "no"
 
   postgres:
     image: postgres:16
@@ -33,6 +47,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -63,15 +78,14 @@ services:
       POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
       LDAP_HOSTNAME: ldap
       LDAP_PORT: 389
-      LDAP_SEARCH_BIND_DN: cn=admin,dc=demo,dc=local
-      LDAP_SEARCH_BIND_PASSWORD: ${LDAP_ADMIN_PASSWORD}
       LDAP_USER_BASE_DN: ou=People,dc=demo,dc=local
       LDAP_USERNAME_ATTRIBUTE: uid
       LDAP_GROUP_BASE_DN: ou=Groups,dc=demo,dc=local
       LDAP_GROUP_NAME_ATTRIBUTE: cn
       LDAP_MEMBER_ATTRIBUTE: member
       LDAP_MEMBER_ATTRIBUTE_TYPE: dn
-      EXTENSION_PRIORITY: "*, -ban"
+      LDAP_GROUP_SEARCH_FILTER: "(objectClass=groupOfNames)"
+      EXTENSION_PRIORITY: "postgresql, ldap, *"
     ports:
       - "8080:8080"
     restart: unless-stopped

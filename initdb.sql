@@ -1,23 +1,4 @@
 ﻿--
--- Licensed to the Apache Software Foundation (ASF) under one
--- or more contributor license agreements.  See the NOTICE file
--- distributed with this work for additional information
--- regarding copyright ownership.  The ASF licenses this file
--- to you under the Apache License, Version 2.0 (the
--- "License"); you may not use this file except in compliance
--- with the License.  You may obtain a copy of the License at
---
---   http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing,
--- software distributed under the License is distributed on an
--- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
--- KIND, either express or implied.  See the License for the
--- specific language governing permissions and limitations
--- under the License.
---
-
---
 -- Connection group types
 --
 
@@ -791,3 +772,120 @@ JOIN guacamole_entity          ON permissions.username = guacamole_entity.name A
 JOIN guacamole_entity affected ON permissions.affected_username = affected.name AND guacamole_entity.type = 'USER'
 JOIN guacamole_user            ON guacamole_user.entity_id = affected.entity_id;
 
+-- Seed demo connections
+INSERT INTO guacamole_connection (connection_name, protocol)
+VALUES
+  ('SSH Server 1', 'ssh'),
+  ('SSH Server 2', 'ssh'),
+  ('RDP Desktop', 'rdp');
+
+-- SSH1 parameters
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'hostname', 'ssh1' FROM guacamole_connection WHERE connection_name = 'SSH Server 1';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'port', '22' FROM guacamole_connection WHERE connection_name = 'SSH Server 1';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'username', 'sshuser' FROM guacamole_connection WHERE connection_name = 'SSH Server 1';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'password', 'change_me' FROM guacamole_connection WHERE connection_name = 'SSH Server 1';
+
+-- SSH2 parameters
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'hostname', 'ssh2' FROM guacamole_connection WHERE connection_name = 'SSH Server 2';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'port', '22' FROM guacamole_connection WHERE connection_name = 'SSH Server 2';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'username', 'sshuser' FROM guacamole_connection WHERE connection_name = 'SSH Server 2';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'password', 'change_me' FROM guacamole_connection WHERE connection_name = 'SSH Server 2';
+
+-- RDP parameters
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'hostname', 'desktop' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'port', '3389' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'username', 'desktopuser' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'password', 'change_me' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'ignore-cert', 'true' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
+
+-- Give guacadmin permission to all connections
+INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
+SELECT e.entity_id, c.connection_id, 'READ'
+FROM guacamole_entity e
+CROSS JOIN guacamole_connection c
+WHERE e.name = 'guacadmin'
+  AND e.type = 'USER';
+
+-- Create Guacamole user-group entities matching LDAP group names
+INSERT INTO guacamole_entity (name, type)
+VALUES
+  ('Desktop Users', 'USER_GROUP'),
+  ('SSH Users', 'USER_GROUP')
+ON CONFLICT DO NOTHING;
+
+-- Create Guacamole user-group records for those entities
+INSERT INTO guacamole_user_group (entity_id, disabled)
+SELECT entity_id, false
+FROM guacamole_entity
+WHERE name IN ('Desktop Users', 'SSH Users')
+  AND type = 'USER_GROUP'
+ON CONFLICT DO NOTHING;
+
+-- Desktop Users group can access RDP Desktop
+INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
+SELECT e.entity_id, c.connection_id, 'READ'
+FROM guacamole_entity e
+JOIN guacamole_connection c ON c.connection_name = 'RDP Desktop'
+WHERE e.name = 'Desktop Users'
+  AND e.type = 'USER_GROUP';
+
+-- SSH Users group can access both SSH servers
+INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
+SELECT e.entity_id, c.connection_id, 'READ'
+FROM guacamole_entity e
+JOIN guacamole_connection c ON c.connection_name IN ('SSH Server 1', 'SSH Server 2')
+WHERE e.name = 'SSH Users'
+  AND e.type = 'USER_GROUP';
+
+-- LDAP users as JDBC entities for permission mapping only
+INSERT INTO guacamole_entity (name, type)
+VALUES
+  ('alice', 'USER'),
+  ('bob', 'USER')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_user (
+  entity_id,
+  password_hash,
+  password_salt,
+  password_date,
+  disabled,
+  expired
+)
+SELECT
+  entity_id,
+  decode('CA458A7D494E3BE824F5E1E175A1556C0F8EEF2C2D7DF3633BEC4A29C4411960', 'hex'),
+  decode('FE24ADC5E11E2B25288D1704ABE67A79E342ECC26064CE69C5B3177795A82264', 'hex'),
+  CURRENT_TIMESTAMP,
+  false,
+  false
+FROM guacamole_entity
+WHERE name IN ('alice', 'bob') AND type = 'USER'
+ON CONFLICT DO NOTHING;
+
+-- Alice can see RDP Desktop
+INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
+SELECT e.entity_id, c.connection_id, 'READ'
+FROM guacamole_entity e
+JOIN guacamole_connection c ON c.connection_name = 'RDP Desktop'
+WHERE e.name = 'alice';
+
+-- Bob can see SSH servers
+INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
+SELECT e.entity_id, c.connection_id, 'READ'
+FROM guacamole_entity e
+JOIN guacamole_connection c ON c.connection_name IN ('SSH Server 1', 'SSH Server 2')
+WHERE e.name = 'bob';
