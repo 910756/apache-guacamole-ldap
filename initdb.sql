@@ -885,3 +885,125 @@ SELECT e.entity_id, c.connection_id, 'READ'
 FROM guacamole_entity e
 JOIN guacamole_connection c ON c.connection_name IN ('SSH Server 1', 'SSH Server 2')
 WHERE e.name = 'bob';
+
+-- Final demo RBAC and connection-parameter fix
+
+-- Remove stored target passwords so Guacamole prompts for NPA password
+DELETE FROM guacamole_connection_parameter
+WHERE parameter_name = 'password';
+
+-- Ensure RDP parameters
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'hostname', 'desktop' FROM guacamole_connection WHERE connection_name='RDP Desktop'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'port', '3389' FROM guacamole_connection WHERE connection_name='RDP Desktop'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'username', 'desktopuser' FROM guacamole_connection WHERE connection_name='RDP Desktop'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'security', 'any' FROM guacamole_connection WHERE connection_name='RDP Desktop'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'ignore-cert', 'true' FROM guacamole_connection WHERE connection_name='RDP Desktop'
+ON CONFLICT DO NOTHING;
+
+-- Ensure SSH Server 1 parameters
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'hostname', 'ssh1' FROM guacamole_connection WHERE connection_name='SSH Server 1'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'port', '22' FROM guacamole_connection WHERE connection_name='SSH Server 1'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'username', 'sshuser' FROM guacamole_connection WHERE connection_name='SSH Server 1'
+ON CONFLICT DO NOTHING;
+
+-- Ensure SSH Server 2 parameters
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'hostname', 'ssh2' FROM guacamole_connection WHERE connection_name='SSH Server 2'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'port', '22' FROM guacamole_connection WHERE connection_name='SSH Server 2'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'username', 'sshuser' FROM guacamole_connection WHERE connection_name='SSH Server 2'
+ON CONFLICT DO NOTHING;
+
+-- Ensure group entities
+INSERT INTO guacamole_entity (name, type)
+VALUES ('Desktop Users', 'USER_GROUP'), ('SSH Users', 'USER_GROUP')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_user_group (entity_id, disabled)
+SELECT entity_id, false
+FROM guacamole_entity
+WHERE type='USER_GROUP'
+AND name IN ('Desktop Users', 'SSH Users')
+ON CONFLICT DO NOTHING;
+
+-- Ensure LDAP user bridge entities
+INSERT INTO guacamole_entity (name, type)
+VALUES ('alice', 'USER'), ('bob', 'USER')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_user (
+  entity_id,
+  password_hash,
+  password_salt,
+  password_date,
+  disabled,
+  expired
+)
+SELECT
+  entity_id,
+  decode(md5(random()::text), 'hex'),
+  decode(md5(random()::text), 'hex'),
+  CURRENT_TIMESTAMP,
+  false,
+  false
+FROM guacamole_entity
+WHERE type='USER'
+AND name IN ('alice', 'bob')
+AND entity_id NOT IN (SELECT entity_id FROM guacamole_user);
+
+-- Ensure group membership bridge
+INSERT INTO guacamole_user_group_member (user_group_id, member_entity_id)
+SELECT gg.user_group_id, u.entity_id
+FROM guacamole_user_group gg
+JOIN guacamole_entity g ON g.entity_id = gg.entity_id
+JOIN guacamole_entity u ON u.name='alice' AND u.type='USER'
+WHERE g.name='Desktop Users'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_user_group_member (user_group_id, member_entity_id)
+SELECT gg.user_group_id, u.entity_id
+FROM guacamole_user_group gg
+JOIN guacamole_entity g ON g.entity_id = gg.entity_id
+JOIN guacamole_entity u ON u.name='bob' AND u.type='USER'
+WHERE g.name='SSH Users'
+ON CONFLICT DO NOTHING;
+
+-- Ensure connection permissions
+INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
+SELECT e.entity_id, c.connection_id, 'READ'
+FROM guacamole_entity e
+JOIN guacamole_connection c ON c.connection_name='RDP Desktop'
+WHERE e.name='Desktop Users'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
+SELECT e.entity_id, c.connection_id, 'READ'
+FROM guacamole_entity e
+JOIN guacamole_connection c ON c.connection_name IN ('SSH Server 1', 'SSH Server 2')
+WHERE e.name='SSH Users'
+ON CONFLICT DO NOTHING;
