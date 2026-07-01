@@ -787,7 +787,6 @@ SELECT connection_id, 'port', '22' FROM guacamole_connection WHERE connection_na
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'username', 'sshuser' FROM guacamole_connection WHERE connection_name = 'SSH Server 1';
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
-SELECT connection_id, 'password', 'change_me' FROM guacamole_connection WHERE connection_name = 'SSH Server 1';
 
 -- SSH2 parameters
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
@@ -797,8 +796,6 @@ SELECT connection_id, 'port', '22' FROM guacamole_connection WHERE connection_na
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'username', 'sshuser' FROM guacamole_connection WHERE connection_name = 'SSH Server 2';
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
-SELECT connection_id, 'password', 'change_me' FROM guacamole_connection WHERE connection_name = 'SSH Server 2';
-
 -- RDP parameters
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'hostname', 'desktop' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
@@ -807,7 +804,6 @@ SELECT connection_id, 'port', '3389' FROM guacamole_connection WHERE connection_
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'username', 'desktopuser' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
-SELECT connection_id, 'password', 'change_me' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'ignore-cert', 'true' FROM guacamole_connection WHERE connection_name = 'RDP Desktop';
 
